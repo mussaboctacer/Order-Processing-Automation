@@ -1,0 +1,608 @@
+{
+  "name": "AutoCart: Main Order Processing",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "/autocart/orders",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -1200,
+        0
+      ],
+      "id": "webhook-order-receive",
+      "name": "Webhook: Order Received"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.body.orderId }}",
+              "operation": "notEmpty",
+              "value2": null
+            },
+            {
+              "value1": "={{ $json.body.customerName }}",
+              "operation": "notEmpty",
+              "value2": null
+            },
+            {
+              "value1": "={{ $json.body.customerEmail }}",
+              "operation": "notEmpty",
+              "value2": null
+            }
+          ],
+          "number": [
+            {
+              "value1": "={{ $json.body.items.length }}",
+              "operation": "greaterThan",
+              "value2": 0
+            }
+          ]
+        },
+        "combinator": "and"
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -1000,
+        0
+      ],
+      "id": "if-validate-input",
+      "name": "IF: Validate Input"
+    },
+    {
+      "parameters": {
+        "message": "Order received: {{ $json.body.orderId }} from {{ $json.body.customerName }}"
+      },
+      "type": "n8n-nodes-base.logger",
+      "typeVersion": 1,
+      "position": [
+        -800,
+        0
+      ],
+      "id": "logger-order-received",
+      "name": "Logger: Order Received"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-1",
+              "name": "orderId",
+              "value": "={{ $json.body.orderId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-2",
+              "name": "customerName",
+              "value": "={{ $json.body.customerName }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-3",
+              "name": "customerEmail",
+              "value": "={{ $json.body.customerEmail }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-4",
+              "name": "items",
+              "value": "={{ $json.body.items }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-5",
+              "name": "processedItems",
+              "value": "={{ [] }}",
+              "type": "array"
+            },
+            {
+              "id": "assign-6",
+              "name": "orderStatus",
+              "value": "={{ \"pending\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -600,
+        0
+      ],
+      "id": "set-extract-data",
+      "name": "Set: Extract Order Data"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -400,
+        0
+      ],
+      "id": "split-items",
+      "name": "Split In Batches: Items"
+    },
+    {
+      "parameters": {
+        "workflowId": "{{ env.INVENTORY_CHECK_WORKFLOW_ID }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        -200,
+        0
+      ],
+      "id": "execute-inventory-check",
+      "name": "Execute Workflow: Inventory Check"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.body.quantity }}",
+              "operation": "lessOrEqual",
+              "value2": "={{ $json.stockLevel }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "if-stock-check",
+      "name": "IF: Check Stock (qty <= stock?)"
+    },
+    {
+      "parameters": {
+        "workflowId": "{{ env.CRM_CONTACT_WORKFLOW_ID }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        200,
+        -300
+      ],
+      "id": "execute-crm-contact",
+      "name": "Execute Workflow: CRM Contact (In-Stock)"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-1",
+              "name": "productId",
+              "value": "={{ $json.body.productId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-2",
+              "name": "productName",
+              "value": "={{ $json.productName }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-3",
+              "name": "quantity",
+              "value": "={{ $json.body.quantity }}",
+              "type": "number"
+            },
+            {
+              "id": "assign-4",
+              "name": "status",
+              "value": "={{ \"fulfilled\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        400,
+        -300
+      ],
+      "id": "set-item-fulfilled",
+      "name": "Set: Mark Item as Fulfilled"
+    },
+    {
+      "parameters": {
+        "workflowId": "{{ env.BACKORDER_WORKFLOW_ID }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "id": "execute-backorder",
+      "name": "Execute Workflow: Backorder Handling"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-1",
+              "name": "productId",
+              "value": "={{ $json.body.productId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-2",
+              "name": "productName",
+              "value": "={{ $json.productName }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-3",
+              "name": "quantity",
+              "value": "={{ $json.body.quantity }}",
+              "type": "number"
+            },
+            {
+              "id": "assign-4",
+              "name": "status",
+              "value": "={{ \"backordered\" }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-5",
+              "name": "stockLevel",
+              "value": "={{ $json.stockLevel }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        400,
+        300
+      ],
+      "id": "set-item-backordered",
+      "name": "Set: Mark Item as Backordered"
+    },
+    {
+      "parameters": {
+        "jsCode": "const fulfilled = $('Set: Mark Item as Fulfilled').all().map(item => ({...item.json}));\nconst backordered = $('Set: Mark Item as Backordered').all().map(item => ({...item.json}));\n\nconst allItems = [...fulfilled, ...backordered];\n\nconst hasBackorder = backordered.length > 0;\nconst status = hasBackorder ? 'partially_backordered' : 'fulfilled';\n\nreturn {\n  orderId: $json.orderId,\n  customerName: $json.customerName,\n  customerEmail: $json.customerEmail,\n  status: status,\n  items: allItems,\n  fulfilledCount: fulfilled.length,\n  backorderedCount: backordered.length,\n  totalItems: allItems.length,\n  timestamp: new Date().toISOString()\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        600,
+        0
+      ],
+      "id": "code-aggregate-results",
+      "name": "Code: Aggregate Results"
+    },
+    {
+      "parameters": {
+        "message": "Order {{ $json.orderId }}: {{ $json.fulfilledCount }} fulfilled, {{ $json.backorderedCount }} backordered"
+      },
+      "type": "n8n-nodes-base.logger",
+      "typeVersion": 1,
+      "position": [
+        800,
+        0
+      ],
+      "id": "logger-order-summary",
+      "name": "Logger: Order Summary"
+    },
+    {
+      "parameters": {
+        "workflowId": "{{ env.EMAIL_NOTIFICATION_WORKFLOW_ID }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        0
+      ],
+      "id": "execute-email-notification",
+      "name": "Execute Workflow: Send Email"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{{ $json }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "webhook-response-success",
+      "name": "Webhook Response: Success (200)"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "{\"status\": \"error\", \"message\": \"Invalid order payload. Required fields: orderId, customerName, customerEmail, items (non-empty array with quantity > 0)\"}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -800,
+        -400
+      ],
+      "id": "webhook-response-error",
+      "name": "Webhook Response: Invalid Input (400)"
+    },
+    {
+      "parameters": {
+        "message": "Validation failed: Missing required fields or invalid items array"
+      },
+      "type": "n8n-nodes-base.logger",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        -400
+      ],
+      "id": "logger-validation-failed",
+      "name": "Logger: Validation Failed"
+    }
+  ],
+  "connections": {
+    "Webhook: Order Received": {
+      "main": [
+        [
+          {
+            "node": "IF: Validate Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Validate Input": {
+      "main": [
+        [
+          {
+            "node": "Logger: Order Received",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Logger: Validation Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logger: Validation Failed": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response: Invalid Input (400)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logger: Order Received": {
+      "main": [
+        [
+          {
+            "node": "Set: Extract Order Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: Extract Order Data": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches: Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches: Items": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: Inventory Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Aggregate Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow: Inventory Check": {
+      "main": [
+        [
+          {
+            "node": "IF: Check Stock (qty <= stock?)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF: Check Stock (qty <= stock?)": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: CRM Contact (In-Stock)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Execute Workflow: Backorder Handling",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow: CRM Contact (In-Stock)": {
+      "main": [
+        [
+          {
+            "node": "Set: Mark Item as Fulfilled",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: Mark Item as Fulfilled": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches: Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow: Backorder Handling": {
+      "main": [
+        [
+          {
+            "node": "Set: Mark Item as Backordered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: Mark Item as Backordered": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches: Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Aggregate Results": {
+      "main": [
+        [
+          {
+            "node": "Logger: Order Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logger: Order Summary": {
+      "main": [
+        [
+          {
+            "node": "Execute Workflow: Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Workflow: Send Email": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response: Success (200)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {
+    "Webhook: Order Received": [
+      {
+        "json": {
+          "body": {
+            "orderId": "ORD-1001",
+            "customerName": "Jane Doe",
+            "customerEmail": "jane@example.com",
+            "items": [
+              {
+                "productId": "a1b2",
+                "quantity": 2
+              },
+              {
+                "productId": "c3d4",
+                "quantity": 5
+              }
+            ]
+          },
+          "headers": {
+            "content-type": "application/json"
+          },
+          "query": {}
+        }
+      }
+    ]
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "instanceId": "autocart-main"
+  },
+  "nodeGroups": [],
+  "tags": [
+    "autocart",
+    "order-processing",
+    "main-workflow"
+  ],
+  "id": "autocart-main-workflow",
+  "versionId": "v1"
+}

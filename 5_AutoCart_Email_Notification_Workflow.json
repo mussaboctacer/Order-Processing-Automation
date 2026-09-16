@@ -1,0 +1,180 @@
+{
+  "name": "AutoCart: Email Notification Sub-Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        0
+      ],
+      "id": "start",
+      "name": "Start"
+    },
+    {
+      "parameters": {
+        "message": "Preparing email notification for {{ $json.customerEmail }}, Order: {{ $json.orderId }}"
+      },
+      "type": "n8n-nodes-base.logger",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        0
+      ],
+      "id": "logger-email-start",
+      "name": "Logger: Email Preparation Start"
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $json.items || [];\nconst fulfilledItems = items.filter(item => item.status === 'fulfilled');\nconst backorderedItems = items.filter(item => item.status === 'backordered');\n\nlet itemsHtml = '<h3>Order Items:</h3><ul>';\nitems.forEach(item => {\n  const icon = item.status === 'fulfilled' ? '✓' : '⏳';\n  itemsHtml += `<li>${icon} ${item.productName || 'Product'} - Qty: ${item.quantity} - ${item.status.toUpperCase()}</li>`;\n});\nitemsHtml += '</ul>';\n\nconst backorderNote = backorderedItems.length > 0 ? \n  '<p><strong>Note:</strong> Some items are backordered and will be shipped separately.</p>' : '';\n\nconst emailBody = `\nDear ${$json.customerName},\n\nThank you for your order! Here's a summary of your purchase:\n\nOrder ID: ${$json.orderId}\nStatus: ${$json.status}\nTotal Items: ${items.length}\nFulfilled: ${fulfilledItems.length}\nBackordered: ${backorderedItems.length}\n\n${itemsHtml}\n${backorderNote}\n\nWe will keep you updated on your order status.\n\nBest regards,\nAutoCart Team\n`;\n\nreturn {\n  orderId: $json.orderId,\n  customerName: $json.customerName,\n  customerEmail: $json.customerEmail,\n  orderStatus: $json.status,\n  emailSubject: `Order Confirmation - ${$json.orderId}`,\n  emailBody: emailBody,\n  itemCount: items.length,\n  fulfilledCount: fulfilledItems.length,\n  backorderedCount: backorderedItems.length\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        0
+      ],
+      "id": "code-build-email",
+      "name": "Code: Build Email Body"
+    },
+    {
+      "parameters": {
+        "fromEmail": "noreply@autocart.local",
+        "toEmail": "={{ $json.customerEmail }}",
+        "subject": "={{ $json.emailSubject }}",
+        "text": "={{ $json.emailBody }}",
+        "nodeCredentialType": "smtpApi",
+        "authentication": "smtpApi"
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "email-send",
+      "name": "Email Send: Order Confirmation"
+    },
+    {
+      "parameters": {
+        "message": "Email sent successfully to {{ $json.customerEmail }} for order {{ $json.orderId }}"
+      },
+      "type": "n8n-nodes-base.logger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        0
+      ],
+      "id": "logger-email-sent",
+      "name": "Logger: Email Sent"
+    },
+    {
+      "parameters": {
+        "jsCode": "console.error(`Failed to send email to ${$json.customerEmail}: ${$json.error}`);\n\nreturn {\n  emailFailed: true,\n  customerEmail: $json.customerEmail,\n  orderId: $json.orderId,\n  error: $json.error || 'Email send failed'\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ],
+      "id": "code-email-error",
+      "name": "Code: Handle Email Error"
+    },
+    {
+      "parameters": {
+        "message": "Email send failed for order {{ $json.orderId }}. Error: {{ $json.error }}"
+      },
+      "type": "n8n-nodes-base.logger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ],
+      "id": "logger-email-error",
+      "name": "Logger: Email Error"
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Logger: Email Preparation Start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logger: Email Preparation Start": {
+      "main": [
+        [
+          {
+            "node": "Code: Build Email Body",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Build Email Body": {
+      "main": [
+        [
+          {
+            "node": "Email Send: Order Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Send: Order Confirmation": {
+      "main": [
+        [
+          {
+            "node": "Logger: Email Sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Handle Email Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Handle Email Error": {
+      "main": [
+        [
+          {
+            "node": "Logger: Email Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "instanceId": "autocart-email"
+  },
+  "nodeGroups": [],
+  "tags": [
+    "autocart",
+    "sub-workflow",
+    "email-notification"
+  ],
+  "id": "autocart-email-workflow",
+  "versionId": "v1"
+}

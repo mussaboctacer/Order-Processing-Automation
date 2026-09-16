@@ -1,0 +1,303 @@
+{
+  "name": "AutoCart: Inventory Check Sub-Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        0
+      ],
+      "id": "start",
+      "name": "Start"
+    },
+    {
+      "parameters": {
+        "message": "Checking inventory for product: {{ $json.body.productId }}"
+      },
+      "type": "n8n-nodes-base.logger",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        0
+      ],
+      "id": "logger-inventory-check-start",
+      "name": "Logger: Inventory Check Start"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://{{ env.MOCKAPI_ID }}.mockapi.io/products/{{ $json.body.productId }}",
+        "authentication": "headerAuth",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {
+          "response": "json"
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -200,
+        0
+      ],
+      "id": "http-inventory-api",
+      "name": "HTTP: Fetch from Inventory API"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-1",
+              "name": "productId",
+              "value": "={{ $json.body.productId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-2",
+              "name": "productName",
+              "value": "={{ $json.body.name }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-3",
+              "name": "stockLevel",
+              "value": "={{ $json.body.stock }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        0,
+        0
+      ],
+      "id": "set-inventory-response",
+      "name": "Set: Extract Inventory Data"
+    },
+    {
+      "parameters": {
+        "message": "Inventory check successful. Product: {{ $json.productName }}, Stock: {{ $json.stockLevel }}"
+      },
+      "type": "n8n-nodes-base.logger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        0
+      ],
+      "id": "logger-inventory-success",
+      "name": "Logger: Inventory Success"
+    },
+    {
+      "parameters": {
+        "jsCode": "console.error(`Inventory API failed for product ${$json.body.productId}: ${$json.statusCode}`);\n\nreturn {\n  productId: $json.body.productId,\n  error: $json.error || 'API Error',\n  statusCode: $json.statusCode || 500,\n  retryCount: 0\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        300
+      ],
+      "id": "code-inventory-error",
+      "name": "Code: Handle Inventory Error"
+    },
+    {
+      "parameters": {
+        "waitTime": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        300
+      ],
+      "id": "wait-retry-delay",
+      "name": "Wait: Retry Delay (30s)"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://{{ env.MOCKAPI_ID }}.mockapi.io/products/{{ $json.productId }}",
+        "authentication": "headerAuth",
+        "nodeCredentialType": "httpHeaderAuth",
+        "options": {
+          "response": "json"
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        200,
+        300
+      ],
+      "id": "http-inventory-api-retry",
+      "name": "HTTP: Retry Inventory API"
+    },
+    {
+      "parameters": {
+        "message": "Inventory API retry successful for {{ $json.body.productId }}"
+      },
+      "type": "n8n-nodes-base.logger",
+      "typeVersion": 1,
+      "position": [
+        400,
+        300
+      ],
+      "id": "logger-inventory-retry-success",
+      "name": "Logger: Retry Success"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-1",
+              "name": "productId",
+              "value": "={{ $json.body.productId }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-2",
+              "name": "productName",
+              "value": "={{ $json.body.name }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-3",
+              "name": "stockLevel",
+              "value": "={{ $json.body.stock }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        600,
+        300
+      ],
+      "id": "set-inventory-retry-response",
+      "name": "Set: Extract Retry Response"
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Logger: Inventory Check Start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logger: Inventory Check Start": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Fetch from Inventory API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Fetch from Inventory API": {
+      "main": [
+        [
+          {
+            "node": "Set: Extract Inventory Data",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Handle Inventory Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: Extract Inventory Data": {
+      "main": [
+        [
+          {
+            "node": "Logger: Inventory Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Handle Inventory Error": {
+      "main": [
+        [
+          {
+            "node": "Wait: Retry Delay (30s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait: Retry Delay (30s)": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Retry Inventory API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Retry Inventory API": {
+      "main": [
+        [
+          {
+            "node": "Logger: Inventory Retry Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logger: Inventory Retry Success": {
+      "main": [
+        [
+          {
+            "node": "Set: Extract Retry Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "instanceId": "autocart-inventory"
+  },
+  "nodeGroups": [],
+  "tags": [
+    "autocart",
+    "sub-workflow",
+    "inventory-check"
+  ],
+  "id": "autocart-inventory-workflow",
+  "versionId": "v1"
+}

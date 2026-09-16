@@ -1,0 +1,299 @@
+{
+  "name": "AutoCart: CRM Contact Creation Sub-Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        0
+      ],
+      "id": "start",
+      "name": "Start"
+    },
+    {
+      "parameters": {
+        "message": "Creating CRM contact for {{ $json.body.customerEmail }}, Order: {{ $json.body.orderId }}"
+      },
+      "type": "n8n-nodes-base.logger",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        0
+      ],
+      "id": "logger-crm-start",
+      "name": "Logger: CRM Create Start"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://{{ env.MOCKAPI_ID }}.mockapi.io/contacts",
+        "authentication": "headerAuth",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "={{ $json.body.customerName }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.body.customerEmail }}"
+            },
+            {
+              "name": "orderId",
+              "value": "={{ $json.body.orderId }}"
+            },
+            {
+              "name": "status",
+              "value": "={{ $json.body.itemStatus || 'fulfilled' }}"
+            }
+          ]
+        },
+        "options": {
+          "response": "json"
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -200,
+        0
+      ],
+      "id": "http-crm-api",
+      "name": "HTTP: Create CRM Contact"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-1",
+              "name": "contactId",
+              "value": "={{ $json.body.id }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-2",
+              "name": "customerEmail",
+              "value": "={{ $json.body.email }}",
+              "type": "string"
+            },
+            {
+              "id": "assign-3",
+              "name": "orderId",
+              "value": "={{ $json.body.orderId }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        0,
+        0
+      ],
+      "id": "set-crm-response",
+      "name": "Set: Extract CRM Response"
+    },
+    {
+      "parameters": {
+        "message": "CRM contact created successfully. Contact ID: {{ $json.contactId }}"
+      },
+      "type": "n8n-nodes-base.logger",
+      "typeVersion": 1,
+      "position": [
+        200,
+        0
+      ],
+      "id": "logger-crm-success",
+      "name": "Logger: CRM Success"
+    },
+    {
+      "parameters": {
+        "jsCode": "console.error(`CRM API failed: ${$json.statusCode}`);\n\nreturn {\n  orderId: $json.body.orderId,\n  customerEmail: $json.body.customerEmail,\n  error: $json.error || 'CRM API Error',\n  statusCode: $json.statusCode || 500\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        300
+      ],
+      "id": "code-crm-error",
+      "name": "Code: Handle CRM Error"
+    },
+    {
+      "parameters": {
+        "waitTime": 30
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        300
+      ],
+      "id": "wait-crm-retry",
+      "name": "Wait: CRM Retry Delay (30s)"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://{{ env.MOCKAPI_ID }}.mockapi.io/contacts",
+        "authentication": "headerAuth",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "={{ $json.orderId }}"
+            },
+            {
+              "name": "email",
+              "value": "={{ $json.customerEmail }}"
+            },
+            {
+              "name": "orderId",
+              "value": "={{ $json.orderId }}"
+            },
+            {
+              "name": "status",
+              "value": "fulfilled"
+            }
+          ]
+        },
+        "options": {
+          "response": "json"
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        200,
+        300
+      ],
+      "id": "http-crm-api-retry",
+      "name": "HTTP: Retry CRM Contact"
+    },
+    {
+      "parameters": {
+        "message": "CRM contact creation retry successful"
+      },
+      "type": "n8n-nodes-base.logger",
+      "typeVersion": 1,
+      "position": [
+        400,
+        300
+      ],
+      "id": "logger-crm-retry-success",
+      "name": "Logger: CRM Retry Success"
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Logger: CRM Create Start",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logger: CRM Create Start": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Create CRM Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Create CRM Contact": {
+      "main": [
+        [
+          {
+            "node": "Set: Extract CRM Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code: Handle CRM Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set: Extract CRM Response": {
+      "main": [
+        [
+          {
+            "node": "Logger: CRM Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Handle CRM Error": {
+      "main": [
+        [
+          {
+            "node": "Wait: CRM Retry Delay (30s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait: CRM Retry Delay (30s)": {
+      "main": [
+        [
+          {
+            "node": "HTTP: Retry CRM Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP: Retry CRM Contact": {
+      "main": [
+        [
+          {
+            "node": "Logger: CRM Retry Success",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "instanceId": "autocart-crm"
+  },
+  "nodeGroups": [],
+  "tags": [
+    "autocart",
+    "sub-workflow",
+    "crm-integration"
+  ],
+  "id": "autocart-crm-workflow",
+  "versionId": "v1"
+}

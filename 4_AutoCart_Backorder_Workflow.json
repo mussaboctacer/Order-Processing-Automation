@@ -1,0 +1,131 @@
+{
+  "name": "AutoCart: Backorder Handling Sub-Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        0
+      ],
+      "id": "start",
+      "name": "Start"
+    },
+    {
+      "parameters": {
+        "message": "Backorder triggered for Product: {{ $json.body.productId }}, Quantity requested: {{ $json.body.quantity }}, Stock available: {{ $json.body.stockLevel }}"
+      },
+      "type": "n8n-nodes-base.logger",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        0
+      ],
+      "id": "logger-backorder-triggered",
+      "name": "Logger: Backorder Triggered"
+    },
+    {
+      "parameters": {
+        "jsCode": "const shortage = $json.body.quantity - $json.body.stockLevel;\n\nreturn {\n  productId: $json.body.productId,\n  productName: $json.body.productName,\n  quantityRequested: $json.body.quantity,\n  quantityAvailable: $json.body.stockLevel,\n  shortage: shortage,\n  orderId: $json.body.orderId,\n  backorderStatus: 'pending',\n  createdAt: new Date().toISOString()\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        0
+      ],
+      "id": "code-create-backorder",
+      "name": "Code: Create Backorder Record"
+    },
+    {
+      "parameters": {
+        "message": "Backorder created: {{ $json.productName }} ({{ $json.shortage }} units short). Order: {{ $json.orderId }}"
+      },
+      "type": "n8n-nodes-base.logger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "logger-backorder-logged",
+      "name": "Logger: Backorder Logged"
+    },
+    {
+      "parameters": {
+        "jsCode": "return {\n  backorderProcessed: true,\n  productId: $json.productId,\n  shortage: $json.shortage,\n  message: `Backorder recorded for ${$json.productName}. Will notify customer.`\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        0
+      ],
+      "id": "code-backorder-confirmation",
+      "name": "Code: Backorder Confirmation"
+    }
+  ],
+  "connections": {
+    "Start": {
+      "main": [
+        [
+          {
+            "node": "Logger: Backorder Triggered",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logger: Backorder Triggered": {
+      "main": [
+        [
+          {
+            "node": "Code: Create Backorder Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code: Create Backorder Record": {
+      "main": [
+        [
+          {
+            "node": "Logger: Backorder Logged",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Logger: Backorder Logged": {
+      "main": [
+        [
+          {
+            "node": "Code: Backorder Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "meta": {
+    "instanceId": "autocart-backorder"
+  },
+  "nodeGroups": [],
+  "tags": [
+    "autocart",
+    "sub-workflow",
+    "backorder-handling"
+  ],
+  "id": "autocart-backorder-workflow",
+  "versionId": "v1"
+}
